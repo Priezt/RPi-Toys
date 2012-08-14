@@ -3,6 +3,7 @@
 import RPi.GPIO as GPIO
 import sys
 import time
+import os
 
 LCD_RS = 7
 LCD_E = 8
@@ -22,6 +23,23 @@ LCD_LINE_4 = 0xc0
 
 E_PULSE = 0.00005
 E_DELAY = 0.00005
+
+cache_file_path = os.environ.get('HOME')+"/.lcd_cache"
+
+if not os.path.isfile(cache_file_path):
+	open(cache_file_path, "w").write(repr([]))
+
+cache = []
+
+def load_cache():
+	global cache
+	cache = eval(open(cache_file_path).read())
+
+def save_cache():
+	global cache
+	open(cache_file_path, "w").write(repr(cache))
+
+load_cache()
 
 def main():
 	if len(sys.argv) < 2:
@@ -50,6 +68,9 @@ def lcd_init():
 	lcd_byte(0x06, LCD_CMD) # cursor increase, no shift
 	lcd_byte(0x01, LCD_CMD) # clear screen
 	lcd_byte(0x02, LCD_CMD) # go home
+	global cache
+	cache = []
+	save_cache()
 
 def toggle_enable():
 	time.sleep(E_DELAY)
@@ -59,9 +80,20 @@ def toggle_enable():
 	time.sleep(E_DELAY)
 
 def lcd_print(message):
-	message = message.ljust(LCD_WIDTH, " ")
-	for i in range(LCD_WIDTH):
-		lcd_byte(ord(message[i]), LCD_CHR)
+	global cache
+	cache.append(message)
+	if len(cache) > 4:
+		cache = cache[-4:]
+	lines = ['', '', '', '']
+	line_map = [0, 2, 1, 3]
+	for i in range(len(cache)):
+		lines[line_map[i]] = cache[i]
+	for i in range(4):
+		message = lines[i]
+		message = message.ljust(LCD_WIDTH, " ")
+		for j in range(LCD_WIDTH):
+			lcd_byte(ord(message[j]), LCD_CHR)
+	save_cache()
 
 def lcd_byte(bits, mode):
 	GPIO.output(LCD_RS, mode)
